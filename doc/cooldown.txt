@@ -1,0 +1,130 @@
+*cooldown.txt*    Supply-chain cooldown for vim.pack
+
+INTRODUCTION                                                          *cooldown*
+
+`cooldown.nvim` gates Neovim plugin updates behind a configurable cooldown
+period. When a plugin you depend on publishes a new release or HEAD commit,
+cooldown holds it in a pending queue for N days (15 by default) before
+allowing it into your `nvim-pack-lock.json`. The Neovim built-in plugin
+manager |vim.pack| reads the lockfile and does the actual cloning and
+checkout — cooldown only decides *when* a SHA is allowed to be locked.
+
+No GitHub authentication is required. Updates are discovered via `git
+ls-remote`, the `releases/latest` redirect, and the `releases.atom` feed —
+never the rate-limited `api.github.com`.
+
+USAGE                                                           *cooldown-usage*
+
+In your `init.lua`, before any `vim.pack.add()` calls: >lua
+
+    require('cooldown').setup({
+      plugins = {
+        'stevearc/oil.nvim',
+        { spec = 'folke/which-key.nvim', track = 'head' },
+      },
+      manage_vim_pack = true,
+    })
+<
+
+COMMANDS                                                     *cooldown-commands*
+
+                                                                     *:Cooldown*
+:Cooldown               Check GitHub for updates, apply any that have
+                        cleared the cooldown, and (if `auto_sync` is true)
+                        sync `vim.pack` in the running session.
+
+:Cooldown dry           Report only — write nothing.
+:Cooldown new           Bypass the cooldown for not-yet-installed plugins.
+:Cooldown now           Bypass the cooldown for everything (use carefully).
+:Cooldown status        Show the current pending queue without hitting
+                        GitHub.
+
+CONFIGURATION                                                  *cooldown-config*
+
+`cooldown_days`           (default `15`)
+                        Days a SHA must be observed before it can be
+                        promoted.
+
+`plugins`                 (default `nil`)
+                        Inline Lua list of plugin specs. Entries may be a
+                        string `"owner/repo"` or a table
+                        `{ spec = "owner/repo", track = "auto"|"head"|"release" }`.
+                        A full clone URL (e.g.
+                        `"https://codeberg.org/foo/bar"`) targets any git host;
+                        non-GitHub hosts track HEAD only (see |cooldown-track|).
+
+`plugins_file`            (default `nil`)
+                        Absolute path to a JSON file with the same schema.
+
+`lockfile`                (default `<stdpath('config')>/nvim-pack-lock.json`)
+                        Lockfile path. Must be the one `vim.pack` reads.
+
+`pending`                 (default `<stdpath('config')>/nvim-pack-pending.json`)
+                        Where the pending queue is persisted.
+
+`manage_vim_pack`         (default `false`)
+                        When true, `setup()` calls |vim.pack.add()| with the
+                        resolved specs after promoting ready updates.
+
+`auto_sync`               (default `true`)
+                        When true, `:Cooldown` calls |vim.pack.update()| with
+                        `{force=true, target='lockfile'}` to apply changes
+                        in the running session — no restart needed.
+
+`concurrency`             (default `6`)
+                        Max number of plugins checked in parallel during
+                        |:Cooldown|.
+
+`post_apply`              (default `nil`)
+                        Single callback called once after each successful
+                        apply, with the list of applied items as argument.
+
+TRACKING MODES                                                  *cooldown-track*
+
+`auto` (default)        Track GitHub releases when they exist; HEAD otherwise.
+
+`head`                  Track HEAD commits only. Ignore releases entirely.
+
+`release`               Track releases only. Error if the repo has none.
+
+Release detection is GitHub-only for now. On non-GitHub hosts (full clone
+URLs), `auto` is treated as `head` and `release` errors — HEAD tracking works
+everywhere via `git ls-remote`. Non-GitHub release tracking is roadmapped
+(Tier 2); see the README.
+
+BUILDS                                                          *cooldown-build*
+
+Give a plugin entry a `build` function to run a step after a new SHA is
+approved. cooldown also calls it on startup for already-locked plugins, so
+builds MUST be idempotent (a cheap no-op when their output already exists). >lua
+
+    { 'owner/repo', build = function(ctx) ... end }
+<
+`ctx` is `{ owner, repo, sha, lockfile_entry }`.
+
+For downloading a binary asset off a GitHub release, use the bundled helper
+`require('cooldown.build').release_asset{}` (no GitHub API or token): >lua
+
+    { 'Saghen/blink.cmp',
+      build = require('cooldown.build').release_asset({
+        asset = '{rust-triple}.{ext}',
+        dest  = '~/.local/share/nvim/site/lib/libblink_cmp_fuzzy.{ext}.{sha7}',
+      }) }
+<
+Placeholders: `{arch}` `{os}` `{ext}` `{tag}` `{sha}` `{sha7}` `{rust-triple}`.
+Options: `asset` (string or per-OS table), `dest` (path; dir if `extract`),
+`extract` (unpack archive), `bin` (file inside `dest` to chmod +x).
+
+If a release has assets but none match the `asset` template, release_asset
+aborts with an alert listing the actual asset names — surfacing upstream
+renames instead of a silent 404.
+
+WHY                                                              *cooldown-why*
+
+Most supply-chain attacks on widely-used packages are detected and pulled
+within a few days of going live. A short adoption delay catches the bulk of
+them at zero cost to projects where nothing is wrong. The same pattern is
+shipped by pnpm (`minimumReleaseAge`), Renovate (`minimumReleaseAge`),
+Dependabot (`cooldown`), and Snyk.
+
+ vim:tw=78:ts=8:noet:ft=help:norl:
