@@ -17,6 +17,52 @@ lockfile, and when.
 
 Experimental. The API may shift. See `doc/cooldown.txt` for help tags.
 
+## Installation
+
+cooldown is the gatekeeper, so it has to load before it can manage anything —
+which means a one-time, deliberate first install. Two steps:
+
+**1.** In Neovim, run this once (adjust the URL if you fork it):
+
+```vim
+:lua vim.pack.add({{src='https://github.com/x-kej/cooldown.nvim.git'}}, {load=true, confirm=false}) require('cooldown').bootstrap()
+```
+
+That installs cooldown (which pins it in your `nvim-pack-lock.json`
+automatically), then `bootstrap()`:
+- writes a `lua/plugins.lua` listing every plugin in your lockfile (including
+  cooldown.nvim itself — it won't overwrite an existing file),
+- seeds the cooldown clock so each plugin's wait starts now, and
+- opens a scratch buffer with the exact `init.lua` snippet to paste.
+
+**2.** Paste that snippet near the **top** of your `init.lua` (before other
+plugin config) and restart. It looks like:
+
+```lua
+vim.pack.add({ { src = 'https://github.com/x-kej/cooldown.nvim.git' } },
+             { load = true, confirm = false })
+
+local ok, plugins = pcall(require, 'plugins')
+require('cooldown').setup({
+  plugins         = ok and plugins or nil,  -- missing plugins.lua → lockfile auto-discovery
+  manage_vim_pack = true,
+})
+```
+
+That's the whole setup. cooldown doesn't edit your `init.lua` for you — configs
+vary too much (modular, symlinked, dotfile-managed) and the wiring must load
+early, so you place it consciously.
+
+### cooldown updates itself, too
+
+cooldown.nvim is listed in `plugins.lua` like any other plugin, so its own
+updates go through the same cooldown. One nuance from how `vim.pack` works:
+updates to an already-installed plugin are applied by `vim.pack.update` during
+`:Cooldown` (not by a plain restart), and because cooldown's Lua is already
+loaded for the session, a new cooldown.nvim version **takes effect on the next
+restart**. The early `vim.pack.add` line stays pinned to the lockfile rev, so
+you're never silently pulled to upstream `HEAD`.
+
 ## Requirements
 
 - Neovim 0.12+ (for `vim.pack`)
@@ -60,12 +106,22 @@ right versions.
 Run `:Cooldown` whenever you want to check for new updates from GitHub:
 
 ```
-:Cooldown          " check GitHub, apply any cleared updates, sync vim.pack in-session
-:Cooldown dry      " same but write nothing
-:Cooldown new      " bypass cooldown for plugins not yet installed
-:Cooldown now      " bypass cooldown for everything (fresh-machine setup)
-:Cooldown status   " show the current pending queue without hitting GitHub
+:Cooldown            " check GitHub, apply any cleared updates, sync vim.pack in-session
+:Cooldown dry        " same but write nothing
+:Cooldown new        " bypass cooldown for plugins not yet installed
+:Cooldown now        " bypass cooldown for everything (fresh-machine setup)
+:Cooldown status     " show the current pending queue without hitting GitHub
+:Cooldown bootstrap  " generate lua/plugins.lua from the lockfile + seed cooldown dates
 ```
+
+`:Cooldown bootstrap` is for adopting cooldown when you already have a
+`vim.pack` lockfile (or recovering a lost `plugins.lua`): it writes a
+`lua/plugins.lua` listing every locked plugin (refusing to overwrite an
+existing one), then runs an initial check so each plugin's cooldown clock
+starts from now. Pair it with a `pcall(require, 'plugins')` fallback in your
+config so a missing `plugins.lua` degrades to lockfile auto-discovery rather
+than erroring — that's what keeps `:Cooldown` reachable to run bootstrap in the
+first place.
 
 ## How it tracks updates
 

@@ -1,13 +1,22 @@
 if vim.g.loaded_cooldown then return end
 vim.g.loaded_cooldown = 1
 
-local subcommands = { 'dry', 'now', 'new', 'status' }
+local subcommands = { 'dry', 'now', 'new', 'status', 'bootstrap' }
 
 local function run(sub)
   local cooldown = require('cooldown')
   local cfg      = require('cooldown.config').get()
   local report   = require('cooldown.report')
-  local specs    = cfg._specs or {}
+
+  -- bootstrap derives everything from the lockfile, so it runs even before any
+  -- plugins.lua exists: it writes plugins.lua, shows the init.lua snippet, and
+  -- seeds the cooldown clock.
+  if sub == 'bootstrap' then
+    cooldown.bootstrap()
+    return
+  end
+
+  local specs = cfg._specs or {}
 
   if #specs == 0 then
     vim.notify('cooldown: no plugins configured. Call require("cooldown").setup({...}) first.',

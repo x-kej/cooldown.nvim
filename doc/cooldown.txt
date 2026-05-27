@@ -38,6 +38,12 @@ COMMANDS                                                     *cooldown-commands*
 :Cooldown now           Bypass the cooldown for everything (use carefully).
 :Cooldown status        Show the current pending queue without hitting
                         GitHub.
+:Cooldown bootstrap     Generate `lua/plugins.lua` from the lockfile (one
+                        entry per locked plugin; refuses to overwrite an
+                        existing file), then run an initial check so each
+                        plugin's cooldown clock starts now. For adopting
+                        cooldown with an existing lockfile or recovering a
+                        lost plugins.lua.
 
 CONFIGURATION                                                  *cooldown-config*
 
